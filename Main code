@@ -1,0 +1,584 @@
+import javalib.worldimages.*;
+import tester.Tester;
+import javalib.funworld.*;
+import java.awt.Color;
+import java.util.Random;
+
+/* TEMPLATE:
+Fields:
+... this.x ...            -- int
+... this.y ...            -- int
+... this.size ...         -- int
+... this.vx ...           -- double
+... this.vy ...           -- double
+... this.isBackground ... -- boolean
+
+Methods:
+... this.draw() ...       -- WorldImage
+*/
+
+//Represents a fish in the game with position, size, velocity, and appearance properties
+class Fish {
+  int x;
+  int y;
+  int size;
+  double vx;
+  double vy;
+  boolean isBackground;
+
+  // Constructs a new fish with the given position and size
+  Fish(int x, int y, int size) {
+    this(x, y, size, false);
+  }
+
+  // Constructs a new fish with the given position, size, and background status
+  Fish(int x, int y, int size, boolean isBackground) {
+    this.x = x;
+    this.y = y;
+    this.size = size;
+    this.vx = 0;
+    this.vy = 0;
+    this.isBackground = isBackground;
+  }
+
+  // Draws the fish as a WorldImage with appropriate color and shape
+  WorldImage draw() {
+    Color color = Color.GRAY;
+    if (this.isBackground = true) {
+      color = Color.GRAY;
+    }
+    else {
+      color = Color.ORANGE;
+    }
+    WorldImage body = new CircleImage(this.size, OutlineMode.SOLID, color);
+    WorldImage tail = new TriangleImage(new Posn(this.size, 0),
+        new Posn(this.size * 2, -this.size / 2), new Posn(this.size * 2, this.size / 2),
+        OutlineMode.SOLID, color);
+    WorldImage eye = new CircleImage(this.size / 4, OutlineMode.SOLID, Color.BLACK);
+
+    double eyeOffset = 0.8 * this.size;
+    double tailOffset = -this.size;
+    WorldImage fish = new OverlayOffsetImage(eye, eyeOffset, -this.size / 400,
+        new OverlayOffsetImage(tail, tailOffset, 0, body));
+
+    // If background fish and moving left, flip horizontally
+    if (this.isBackground && this.vx > 0) {
+      fish = new ScaleImage(fish, -1);
+    }
+    return fish;
+  }
+}
+
+/*
+ * TEMPLATE: Methods: ... this.add(Fish) ... -- ILoFish ... this.moveAll
+ * ... -- ILoFish ... this.removeEaten(Fish, FeedingFrenzy) ... -- ILoFish ...
+ * this.drawAll(WorldScene) ... -- WorldScene ... this.collidesWith(Fish,
+ * FeedingFrenzy) ... -- boolean
+ */
+
+//Represents a list of fish in the game with methods for managing multiple fish
+interface ILoFish {
+  ILoFish add(Fish f);
+
+  ILoFish moveAll(int width);
+
+  ILoFish removeEaten(Fish player, FeedingFrenzy world);
+
+  WorldScene drawAll(WorldScene scene);
+
+  boolean collidesWith(Fish player, FeedingFrenzy world);
+}
+
+/*
+ * TEMPLATE: Methods: ... this.add(Fish) ... -- ILoFish ... this.moveAll
+ * ... -- ILoFish ... this.removeEaten(Fish, FeedingFrenzy) ... -- ILoFish ...
+ * this.drawAll(WorldScene) ... -- WorldScene ... this.collidesWith(Fish,
+ * FeedingFrenzy) ... -- boolean
+ */
+
+//Represents an empty list of fish
+class MtLoFish implements ILoFish {
+  // Adds a new fish to the empty list
+  public ILoFish add(Fish f) {
+    return new ConsLoFish(f, this);
+  }
+
+  // Returns the empty list unchanged since there are no fish to move
+  public ILoFish moveAll(int width) {
+    return this;
+  }
+
+  // Returns the empty list unchanged since there are no fish to remove
+  public ILoFish removeEaten(Fish player, FeedingFrenzy world) {
+    return this;
+  }
+
+  // Returns the scene unchanged since there are no fish to draw
+  public WorldScene drawAll(WorldScene scene) {
+    return scene;
+  }
+
+  // Returns false since an empty list cannot collide with anything
+  public boolean collidesWith(Fish player, FeedingFrenzy world) {
+    return false;
+  }
+}
+
+/*
+ * TEMPLATE: Fields: ... this.first ... -- Fish ... this.rest ... -- ILoFish
+ * 
+ * Methods: ... this.add(Fish) ... -- ILoFish ... this.moveAll ... --
+ * ILoFish ... this.removeEaten(Fish, FeedingFrenzy) ... -- ILoFish ...
+ * this.drawAll(WorldScene) ... -- WorldScene ... this.collidesWith(Fish,
+ * FeedingFrenzy) ... -- boolean
+ * 
+ * Methods for fields: ... this.first.draw() ... -- WorldImage ...
+ * this.rest.add(Fish) ... -- ILoFish ... this.rest.moveAll ... -- ILoFish
+ * ... this.rest.removeEaten(Fish, FeedingFrenzy) ... -- ILoFish ...
+ * this.rest.drawAll(WorldScene) ... -- WorldScene ...
+ * this.rest.collidesWith(Fish, FeedingFrenzy) ... -- boolean
+ */
+
+//Represents a non-empty list of fish
+class ConsLoFish implements ILoFish {
+  Fish first;
+  ILoFish rest;
+
+  // Constructs a new non-empty list with the given first fish and rest of the
+  // list
+  ConsLoFish(Fish first, ILoFish rest) {
+    this.first = first;
+    this.rest = rest;
+  }
+
+  // Adds a new fish to the front of this non-empty list
+  public ILoFish add(Fish f) {
+    return new ConsLoFish(f, this);
+  }
+
+  // Moves the first fish and recursively moves the rest of the list
+  public ILoFish moveAll(int width) {
+    this.first.x += this.first.vx;
+    if (this.first.vx > 0 && this.first.x > width + this.first.size) {
+      this.first.x = -this.first.size;
+    }
+    else if (this.first.vx < 0 && this.first.x < -this.first.size) {
+      this.first.x = width + this.first.size;
+    }
+    return new ConsLoFish(this.first, this.rest.moveAll(width));
+  }
+
+  // Removes the first fish if eaten and recursively processes the rest
+  public ILoFish removeEaten(Fish player, FeedingFrenzy world) {
+    if (world.collides(player, this.first) && player.size >= this.first.size) {
+      player.size += this.first.size / 10;
+      if (player.size > 49) {
+        world.gameOver = true;
+        world.win = true;
+        return this.rest.removeEaten(player, world);
+      }
+      return this.rest.removeEaten(player, world);
+    }
+    else if (world.collides(player, this.first) && player.size < this.first.size) {
+      world.gameOver = true;
+      world.win = false;
+      return this;
+    }
+    else {
+      return new ConsLoFish(this.first, this.rest.removeEaten(player, world));
+    }
+  }
+
+  // Draws the first fish and recursively draws the rest
+  public WorldScene drawAll(WorldScene scene) {
+    scene = scene.placeImageXY(this.first.draw(), this.first.x, this.first.y);
+    return this.rest.drawAll(scene);
+  }
+
+  // Checks if the first fish collides and recursively checks the rest
+  public boolean collidesWith(Fish player, FeedingFrenzy world) {
+    if (world.collides(player, this.first)) {
+      if (player.size >= this.first.size) {
+        player.size += this.first.size / 10;
+        if (player.size > 49) {
+          world.gameOver = true;
+          world.win = true;
+        }
+      }
+      else {
+        world.gameOver = true;
+        world.win = false;
+      }
+      return true;
+    }
+    return this.rest.collidesWith(player, world);
+  }
+}
+
+/*
+ * TEMPLATE: Fields: ... this.player ... -- Fish ... this.width ... -- int ...
+ * this.height ... -- int ... this.movingLeft ... -- boolean ...
+ * this.movingRight ... -- boolean ... this.movingUp ... -- boolean ...
+ * this.movingDown ... -- boolean ... this.acceleration ... -- double ...
+ * this.friction ... -- double ... this.maxSpeed ... -- double ...
+ * this.backgroundFish ... -- ILoFish ... this.rand ... -- Random ...
+ * this.tickCount ... -- int ... this.gameOver ... -- boolean ... this.win ...
+ * -- boolean
+ * 
+ * Methods: ... this.makeScene() ... -- WorldScene ... this.onKeyEvent(String)
+ * ... -- World ... this.onKeyReleased(String) ... -- World ...
+ * this.collides(Fish, Fish) ... -- boolean ... this.onTick() ... -- World
+ * 
+ * Methods for fields: ... this.player.draw() ... -- WorldImage ...
+ * this.backgroundFish.add(Fish) ... -- ILoFish ...
+ * this.backgroundFish.moveAll ... -- ILoFish ...
+ * this.backgroundFish.removeEaten(Fish, FeedingFrenzy) ... -- ILoFish ...
+ * this.backgroundFish.drawAll(WorldScene) ... -- WorldScene ...
+ * this.backgroundFish.collidesWith(Fish, FeedingFrenzy) ... -- boolean
+ */
+
+// Represents the main game world where the game takes place
+class FeedingFrenzy extends World {
+  Fish player;
+  int width;
+  int height;
+  boolean movingLeft;
+  boolean movingRight;
+  boolean movingUp;
+  boolean movingDown;
+  double acceleration = 1;
+  double friction = 0.95;
+  double maxSpeed = 1000;
+  ILoFish backgroundFish;
+  Random rand;
+  int tickCount;
+  boolean gameOver;
+  boolean win;
+
+  // Constructs a new game with default settings
+  FeedingFrenzy() {
+    this.width = 600;
+    this.height = 400;
+    this.player = new Fish(300, 200, 20);
+    this.movingLeft = false;
+    this.movingRight = false;
+    this.movingUp = false;
+    this.movingDown = false;
+    this.backgroundFish = new MtLoFish();
+    this.rand = new Random();
+    this.tickCount = 0;
+    this.gameOver = false;
+    this.win = false;
+  }
+
+  // Creates and returns the current game scene with all game elements
+  public WorldScene makeScene() {
+    WorldScene scene = this.getEmptyScene();
+    if (gameOver) {
+      String msg = "";
+      if (win = true) {
+        msg = "YOU WIN!!!";
+      }
+      else {
+        msg = "YOU LOSE :(";
+      }
+      Color color = Color.gray;
+      if (win = true) {
+        color = Color.GREEN;
+      }
+      else {
+        color = Color.RED;
+      }
+      WorldImage endText = new TextImage(msg, 48, color);
+      return scene.placeImageXY(endText, this.width / 2, this.height / 2);
+    }
+    String scoreText = "CURRENT SIZE: " + this.player.size;
+    String scoreToBeatText = "SIZE TO BEAT: 49";
+    WorldImage scoreImg = new TextImage(scoreText, 24, Color.BLUE);
+    WorldImage scoreToBeatImg = new TextImage(scoreToBeatText, 18, Color.BLUE);
+
+    // Place scoreboard at top middle
+    int scoreX = 300;
+    int scoreY = 50;
+    int scoreToBeatY = scoreY + 50;
+
+    scene = scene.placeImageXY(scoreImg, scoreX, scoreY);
+    scene = scene.placeImageXY(scoreToBeatImg, scoreX, scoreToBeatY);
+    // Draw background fish
+    scene = this.backgroundFish.drawAll(scene);
+    // Draw player fish
+    scene = scene.placeImageXY(
+        new OverlayOffsetImage(
+            new CircleImage(this.player.size / 4, OutlineMode.SOLID, Color.BLACK),
+            35 - this.player.size, -this.player.size / 400,
+            new OverlayOffsetImage(
+                new TriangleImage(new Posn(this.player.size, 0),
+                    new Posn(this.player.size * 2, -this.player.size / 2),
+                    new Posn(this.player.size * 2, this.player.size / 2), OutlineMode.SOLID,
+                    Color.ORANGE),
+                -this.player.size, 0,
+                new CircleImage(this.player.size, OutlineMode.SOLID, Color.ORANGE))),
+        this.player.x, this.player.y);
+    return scene;
+  }
+
+  // Updates movement flags when keys are pressed
+  public World onKeyEvent(String key) {
+    if (gameOver) {
+      return this;
+    }
+    if (key.equals("left")) {
+      this.movingLeft = true;
+    }
+    if (key.equals("right")) {
+      this.movingRight = true;
+    }
+    if (key.equals("up")) {
+      this.movingUp = true;
+    }
+    if (key.equals("down")) {
+      this.movingDown = true;
+    }
+    return this;
+  }
+
+  // Updates movement flags when keys are released
+  public World onKeyReleased(String key) {
+    if (gameOver) {
+      return this;
+    }
+    if (key.equals("left")) {
+      this.movingLeft = false;
+    }
+    if (key.equals("right")) {
+      this.movingRight = false;
+    }
+    if (key.equals("up")) {
+      this.movingUp = false;
+    }
+    if (key.equals("down")) {
+      this.movingDown = false;
+    }
+    return this;
+  }
+
+  // Checks if two fish are colliding based on their positions and sizes
+  boolean collides(Fish a, Fish b) {
+    double dx = a.x - b.x; // for x position vector
+    double dy = a.y - b.y; // for y position vector
+    double distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < (a.size + b.size) / 2.0;
+  }
+
+  // Updates the game state on each tick, handling movement and game mechanics
+  public World onTick() {
+    if (gameOver) {
+      return this;
+    }
+    // Helps set inertia based on size of fish
+    double sizeFactor = this.player.size / 20.0; // Base size is 20
+    double accelerationFactor = 1.0 / sizeFactor; // Smaller fish accelerate faster
+    double frictionFactor = Math.pow(0.95, sizeFactor); // Larger fish have more friction
+
+    // Accelerate based on keys held (including inertia for fish)
+    if (this.movingLeft) {
+      this.player.vx -= acceleration * accelerationFactor;
+    }
+    if (this.movingRight) {
+      this.player.vx += acceleration * accelerationFactor;
+    }
+    if (this.movingUp) {
+      this.player.vy -= acceleration * accelerationFactor;
+    }
+    if (this.movingDown) {
+      this.player.vy += acceleration * accelerationFactor;
+    }
+
+    // Top speed
+    if (this.player.vx > maxSpeed) {
+      this.player.vx = maxSpeed;
+    }
+    if (this.player.vx < -maxSpeed) {
+      this.player.vx = -maxSpeed;
+    }
+    if (this.player.vy > maxSpeed) {
+      this.player.vy = maxSpeed;
+    }
+    if (this.player.vy < -maxSpeed) {
+      this.player.vy = -maxSpeed;
+    }
+
+    // Apply friction (more friction for larger fish)
+    this.player.vx *= frictionFactor;
+    this.player.vy *= frictionFactor;
+
+    // Update position
+    this.player.x += this.player.vx;
+    this.player.y += this.player.vy;
+
+    // Move background fish
+    this.backgroundFish = this.backgroundFish.moveAll(this.width);
+
+    // Eating mechanic
+    this.backgroundFish = this.backgroundFish.removeEaten(this.player, this);
+
+    // Add new background fish every 3 seconds (30 ticks)
+    tickCount++;
+    if (tickCount % 30 == 0) {
+      int direction = 0;
+      if (rand.nextBoolean()) {
+        direction = 1;
+      }
+      else {
+        direction = -1;
+      }
+      int x = 0;
+      if (direction == 1) {
+        x = -30;
+      }
+      else {
+        x = this.width + 30;
+      }
+      int y = rand.nextInt(this.height - 40) + 20;
+      int size = rand.nextInt(40) + 10;
+      Fish bgFish = new Fish(x, y, size, true);
+      bgFish.vx = direction * (rand.nextInt(3) + 1);
+      this.backgroundFish = this.backgroundFish.add(bgFish);
+    }
+
+    // Screen wrapping logic for player
+    if (this.player.x < -this.player.size) {
+      this.player.x = this.width + this.player.size;
+    }
+    else if (this.player.x > this.width + this.player.size) {
+      this.player.x = -this.player.size;
+    }
+    if (this.player.y < -this.player.size) {
+      this.player.y = this.height + this.player.size;
+    }
+    else if (this.player.y > this.height + this.player.size) {
+      this.player.y = -this.player.size;
+    }
+
+    return this;
+  }
+}
+
+//Examples and tests for the game
+class Examples {
+  // Test Fish instances
+  Fish playerFish = new Fish(300, 200, 20);
+  Fish backgroundFish1 = new Fish(100, 100, 15, true);
+  Fish backgroundFish2 = new Fish(400, 300, 25, true);
+  Fish bigFish = new Fish(100, 100, 30);
+  Fish overlappingFish = new Fish(100, 100, 20);
+  Fish fish1 = new Fish(100, 100, 20);
+  Fish fish2 = new Fish(110, 110, 20);
+  Fish fish3 = new Fish(200, 200, 20);
+
+  // Test Fish Lists
+  ILoFish emptyList = new MtLoFish();
+  ILoFish singleList = new ConsLoFish(backgroundFish1, emptyList);
+  ILoFish multiList = new ConsLoFish(backgroundFish2, singleList);
+
+  // Test Game instances
+  FeedingFrenzy game = new FeedingFrenzy();
+  FeedingFrenzy gameAfterLeft = (FeedingFrenzy) game.onKeyEvent("left");
+  FeedingFrenzy gameAfterRight = (FeedingFrenzy) game.onKeyEvent("right");
+
+  // Test Fish constructor
+  boolean testFishConstructor(Tester t) {
+    return t.checkExpect(playerFish.x, 300) && t.checkExpect(playerFish.y, 200)
+        && t.checkExpect(playerFish.size, 20) && t.checkExpect(playerFish.vx, 0.0)
+        && t.checkExpect(playerFish.vy, 0.0) && t.checkExpect(playerFish.isBackground, false)
+        && t.checkExpect(backgroundFish1.isBackground, true);
+  }
+
+  // Test Fish draw method
+  boolean testFishDraw(Tester t) {
+    WorldImage playerImage = playerFish.draw();
+    WorldImage backgroundImage = backgroundFish1.draw();
+
+    // Test that images are not null
+    return t.checkExpect(playerImage != null, true) && t.checkExpect(backgroundImage != null, true);
+  }
+
+  // Test MtLoFish methods
+  boolean testMtLoFish(Tester t) {
+    return t.checkExpect(emptyList.add(playerFish), new ConsLoFish(playerFish, emptyList))
+        && t.checkExpect(emptyList.moveAll(600), emptyList)
+        && t.checkExpect(emptyList.removeEaten(playerFish, game), emptyList)
+        && t.checkExpect(emptyList.collidesWith(playerFish, game), false);
+  }
+
+  // Test ConsLoFish add method
+  boolean testConsLoFishAdd(Tester t) {
+    return t.checkExpect(singleList.add(playerFish), new ConsLoFish(playerFish, singleList));
+  }
+
+  // Test ConsLoFish moveAll method
+  boolean testConsLoFishMoveAll(Tester t) {
+    // Set velocity for testing
+    backgroundFish1.vx = 5;
+    backgroundFish1.vy = 3;
+
+    ILoFish movedList = singleList.moveAll(600);
+    ConsLoFish movedCons = (ConsLoFish) movedList;
+
+    return t.checkExpect(movedCons.first.x, 105) && t.checkExpect(movedCons.first.y, 100);
+  }
+
+  // Test ConsLoFish removeEaten method
+  boolean testConsLoFishRemoveEaten(Tester t) {
+    // Test eating smaller fish
+    ILoFish afterEaten = singleList.removeEaten(bigFish, game);
+    return t.checkExpect(afterEaten, emptyList) && t.checkExpect(bigFish.size, 31); // 30 + 15/10
+  }
+
+  // Test ConsLoFish collidesWith method
+  boolean testConsLoFishCollidesWith(Tester t) {
+    return t.checkExpect(singleList.collidesWith(overlappingFish, game), true);
+  }
+
+  // Test FeedingFrenzy constructor
+  boolean testFeedingFrenzyConstructor(Tester t) {
+    return t.checkExpect(game.width, 600) && t.checkExpect(game.height, 400)
+        && t.checkExpect(game.player.x, 300) && t.checkExpect(game.player.y, 200)
+        && t.checkExpect(game.player.size, 20) && t.checkExpect(game.movingLeft, false)
+        && t.checkExpect(game.movingRight, false) && t.checkExpect(game.movingUp, false)
+        && t.checkExpect(game.movingDown, false) && t.checkExpect(game.gameOver, false)
+        && t.checkExpect(game.win, false);
+  }
+
+  // Test FeedingFrenzy collides method
+  boolean testFeedingFrenzyCollides(Tester t) {
+    return t.checkExpect(game.collides(fish1, fish2), true)
+        && t.checkExpect(game.collides(fish1, fish3), false);
+  }
+
+  // Test FeedingFrenzy onKeyEvent method
+  boolean testFeedingFrenzyOnKeyEvent(Tester t) {
+    return t.checkExpect(gameAfterLeft.movingLeft, true)
+        && t.checkExpect(gameAfterRight.movingRight, true);
+  }
+
+  // Test FeedingFrenzy onKeyReleased method
+  boolean testFeedingFrenzyOnKeyReleased(Tester t) {
+    // First press keys
+    FeedingFrenzy gameWithKeys = (FeedingFrenzy) game.onKeyEvent("left");
+    gameWithKeys = (FeedingFrenzy) gameWithKeys.onKeyEvent("right");
+
+    // Then release keys
+    FeedingFrenzy gameAfterRelease = (FeedingFrenzy) gameWithKeys.onKeyReleased("left");
+    gameAfterRelease = (FeedingFrenzy) gameAfterRelease.onKeyReleased("right");
+
+    return t.checkExpect(gameAfterRelease.movingLeft, false)
+        && t.checkExpect(gameAfterRelease.movingRight, false);
+  }
+
+  // Test the game
+  boolean testBigBang(Tester t) {
+    FeedingFrenzy game = new FeedingFrenzy();
+    return game.bigBang(600, 400, 0.1);
+  }
+}
